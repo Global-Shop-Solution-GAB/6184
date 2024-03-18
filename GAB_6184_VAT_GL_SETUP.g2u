@@ -1,0 +1,140 @@
+Program.Sub.ScreenSU.Start
+Gui.F_VATGL..Create
+Gui.F_VATGL..Caption("GL Account Setup for VAT Report")
+Gui.F_VATGL..Size(8700,6375)
+Gui.F_VATGL..MinX(0)
+Gui.F_VATGL..MinY(0)
+Gui.F_VATGL..Position(0,0)
+Gui.F_VATGL..FontSize(9)
+Gui.F_VATGL..BackColor(-2147483633)
+Gui.F_VATGL..MousePointer(0)
+Gui.F_VATGL..Sizeable(False)
+Gui.F_VATGL..Event(UnLoad,Unload)
+Gui.F_VATGL.GsGCGL.Create(GsGridControl)
+Gui.F_VATGL.GsGCGL.Size(8235,5580)
+Gui.F_VATGL.GsGCGL.Position(90,120)
+Gui.F_VATGL.GsGCGL.Event(RowCellClick,GsGCGL_CellClick)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+V.Local.bExist.Declare
+V.Local.iID.Declare
+V.Local.sIconPath.Declare
+
+F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass,180)
+
+F.Intrinsic.String.Build("{0}\GAB\GAS\gss2.ico",V.Caller.PluginsDir,v.Local.sIconPath)
+Gui.F_VATGL..Icon(V.Local.sIconPath)
+
+F.ODBC.Connection!conx.TableExists("CON_GL_VAT_ACCOUNTS",V.Local.bExist)
+F.Intrinsic.Control.If(V.Local.bExist,=,False)
+	F.ODBC.Connection!conx.Execute("CREATE TABLE CON_GL_VAT_ACCOUNTS(ID IDENTITY DEFAULT '0',GL_ACCOUNT CHAR(15),DESCRIPTION CHAR(30),PRIMARY KEY (ID),UNIQUE (ID));")
+F.Intrinsic.Control.EndIf
+
+F.ODBC.Connection!conx.TableExists("CON_GL_VAT_IMPORT",V.Local.bExist)
+F.Intrinsic.Control.If(V.Local.bExist,=,False)
+	F.ODBC.Connection!conx.Execute("CREATE TABLE CON_GL_VAT_IMPORT(INVOICE CHAR(15) NOT NULL ,BATCH CHAR(5) NOT NULL ,VENDOR CHAR(6) NOT NULL ,LINENO INTEGER NOT NULL ,TAXCODE CHAR(40),IMPORTK1NO CHAR(30),REFTAXVALUE DOUBLE,REFFOREIGNINV CHAR(15),DATEINVOICE DATE,DATEBATCH DATE, PRIMARY KEY (INVOICE, BATCH, DATEBATCH, LINENO));")
+F.Intrinsic.Control.EndIf
+
+F.ODBC.Connection!conx.TableExists("INA_GAF_CHANGES_LOG",V.Local.bExist)
+F.Intrinsic.Control.If(V.Local.bExist,=,False)
+	F.ODBC.Connection!conx.Execute("CREATE TABLE INA_GAF_CHANGES_LOG(ID IDENTITY,MONTH INTEGER,YEAR INTEGER,REV INTEGER,USERID VARCHAR(8),DATE_TIME_CHANGED DATETIME,PRIMARY KEY (ID),UNIQUE (ID));")
+F.Intrinsic.Control.EndIf
+
+'Retrieve the latest ID
+F.Data.DataTable.CreateFromSQL("dtGL","conx","select ID, gl_account as Account, description as Description from con_gl_vat_accounts order by gl_account",True)
+F.Data.DataTable.AddColumn("dtGL","Delete","Long")
+F.Intrinsic.Control.If(V.DataTable.dtGL.RowCount,>,0)
+	F.Data.DataTable.Compute("dtGL","MAX(ID)","",V.Local.iID)
+	F.Intrinsic.Math.Add(V.Local.iID,1,V.Local.iID)
+F.Intrinsic.Control.Else
+	V.Local.iID.Set(1)
+F.Intrinsic.Control.EndIf
+
+'Add a new line
+F.Data.DataTable.AddRow("dtGL","ID",V.Local.iID)
+
+Gui.F_VATGL.GsGCGL.AddGridviewFromDatatable("gvGL","dtGL")
+Gui.F_VATGL.GsGCGL.MainView("gvGL")
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","ID","Visible",False)
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Delete","ShowCaption",False)
+Gui.F_VATGL.GsGCGL.ColumnEdit("gvGL","Delete","EditorButton","Delete")
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Account","HeaderHAlignment","Center")
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Description","HeaderHAlignment","Center")
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Account","AllowEdit",False)
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Description","AllowEdit",False)
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Delete","AllowEdit",False)
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Account","MinWidth","120")
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Description","MinWidth","280")
+Gui.F_VATGL.GsGCGL.SetColumnProperty("gvGL","Delete","MinWidth","80")
+
+Gui.F_VATGL..Show
+Program.Sub.Main.End
+
+Program.Sub.Unload.Start
+F.Data.DataTable.Close("dtGL")
+
+F.ODBC.Connection!conx.Close
+F.Intrinsic.Control.End
+
+Program.Sub.Unload.End
+
+Program.Sub.GsGCGL_CellClick.Start
+V.Local.iID.Declare
+V.Local.iWidths.Declare
+V.Local.sFilter.Declare
+V.Local.sRet.Declare
+V.Local.sSelect.Declare
+V.Local.sSQL.Declare
+V.Local.sTitles.Declare
+
+F.Intrinsic.Control.If(V.Args.Column,=,"Delete")
+	F.Intrinsic.Control.If(V.DataTable.dtGL(V.Args.RowIndex).Account!FieldValTrim,<>,"")
+		F.Intrinsic.String.Build("delete from CON_GL_VAT_ACCOUNTS where id = {0}",V.DataTable.dtGL(V.Args.RowIndex).ID!FieldValLong,V.Local.sSQL)
+		F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+		F.Data.DataTable.DeleteRow("dtGL",V.Args.RowIndex)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	F.intrinsic.string.split("GL Account*!*Description","*!*",Variable.local.sTitles)
+	F.intrinsic.string.split("1000*!*2000","*!*",Variable.local.iWidths)
+	F.intrinsic.ui.browser("Select a GL Account","conx","SELECT GL_ACCOUNT,DESCR FROM GL_MASTER ORDER BY GL_ACCOUNT",Variable.local.sTitles,Variable.local.iWidths,Variable.local.sRet)
+	F.Intrinsic.Control.If(V.Local.sRet,<>,"***CANCEL***")
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		'Check if GL account has been selected
+		F.Intrinsic.String.Build("Account = '{0}'",V.Local.sRet(0).Trim,V.Local.sFilter)
+		F.Data.DataTable.Select("dtGL",V.Local.sFilter,V.Local.sSelect)
+		F.Intrinsic.Control.If(V.Local.sSelect,<>,"***NORETURN***")
+			F.Intrinsic.UI.Msgbox("This GL account has been selected","GL Account Setup for VAT Report")
+			F.Intrinsic.Control.ExitSub
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.If(V.DataTable.dtGL(V.Args.RowIndex).Account!FieldValTrim,=,"")
+			F.Intrinsic.String.Build("insert into CON_GL_VAT_ACCOUNTS(ID,GL_ACCOUNT,DESCRIPTION) values({0},'{1}','{2}')",V.DataTable.dtGL(V.Args.RowIndex).ID!FieldValLong,V.Local.sRet(0).Trim,V.Local.sRet(1).Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+			F.Data.DataTable.SetValue("dtGL",V.Args.RowIndex,"Account",V.Local.sRet(0).Trim,"Description",V.Local.sRet(1).Trim)
+			F.Intrinsic.Math.Add(V.DataTable.dtGL(V.Args.RowIndex).ID!FieldValLong,1,V.Local.iID)
+			F.Data.DataTable.AddRow("dtGL","ID",V.Local.iID)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("update CON_GL_VAT_ACCOUNTS set GL_ACCOUNT = '{1}', DESCRIPTION = '{2}' where ID = {0}",V.DataTable.dtGL(V.Args.RowIndex).ID!FieldValLong,V.Local.sRet(0).Trim,V.Local.sRet(1).Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+			F.Data.DataTable.SetValue("dtGL",V.Args.RowIndex,"Account",V.Local.sRet(0).Trim,"Description",V.Local.sRet(1).Trim)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+Program.Sub.GsGCGL_CellClick.End
+
+Program.Sub.Comments.Start
+${$0$}$GL Account Setup for VAT Reporting$}$Mhertanto$}$15/3/2017 2:43:17 PM$}$False
+${$3$}$0$}$$}$0$}$-1$}$$}$12:00:00 AM$}$KITE (Kemudahan Impor Terhadap Ekspor)
+
+This program tracks raw materials in the shop floor from issue, going through outside process, coming back from outside process, WIP to FG, shipment and going through quality. The report is divided into 8 parts: RM Receipts, RM to WIP, Outside Process, Production Summary, Shipment, RM Stock Summary, FG Stock Summary, Scrap and Waste.
+
+This program is designed according to Indonesian Customs requirements for companies which receive import tax exemption for exporting FG using the imported raw materials.
+
+Requirements:
+1. Part has to be designated as 'KITE' in inventory user field 2
+2. Part must have lot/bin
+3. RM receipts only recognize P10, P11 and A10
+Program.Sub.Comments.End
